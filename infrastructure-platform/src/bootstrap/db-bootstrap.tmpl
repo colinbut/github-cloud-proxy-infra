@@ -1,0 +1,56 @@
+#!/bin/bash
+yum update -y 
+yum install xfsprogs -y 
+
+# mount the volumes on startup
+xvdf_result=$(file -s /dev/xvdf)
+if [ "$xvdf_result" == "/dev/xvdf: data" ]
+then
+    mkfs -t xfs /dev/xvdf
+fi
+
+xvds_result=$(file -s /dev/xvds)
+if [ "$xvds_result" == "/dev/xvds: data" ]
+then
+    mkfs -t xfs /dev/xvds
+fi
+
+mkdir /{data,wal}
+mount /dev/xvdf /data
+mount /dev/xvds /wal
+
+# setup auto mounting of volumes upon restart
+UUID1=$(blkid | grep "/dev/xvda1" | awk '{printf substr($3,7,length($3) - 7)}')
+UUID2=$(blkid | grep "/dev/xvdf" | awk '{printf substr($2,7,length($2) - 7)}')
+cp /etc/fstab /etc/fstab.orig
+echo "UUID=$UUID1 /data xfs defaults,nofail 0 2" >> /etc/fstab
+echo "UUID=$UUID2 /wal xfs defaults,nofail 0 2" >> /etc/fstab
+
+# setup daily backup of db
+cd /home/ec2-user/
+touch influxdb-backup.sh
+chown ec2-user:ec2-user influxdb-backup.sh
+chmod +x influxdb-backup.sh
+cat > influxdb-backup.sh <<'EOL'
+#!/bin/bash
+backup=$(date '+%Y%m%d')
+mkdir -p /data/$backup/
+docker exec influxdb influxd backup -database githubcloudproxy -portable /data/$backup/
+cd /data && zip $backup.zip $backup/* 
+aws s3 mv $backup.zip s3://${db_backup_bucket_name}/$backup.zip
+EOL
+
+# setup cron jobs
+su ec2-user -c 'crontab -l > cron; \ 
+	echo "@reboot sudo service docker start" >> cron; \
+	echo "@reboot sudo docker run --rm --name influxdb -v /data:/data -v /wal:/wal -d -p 8086:8086 influxdb" >> cron; \
+	echo "00 00 * * * ./home/ec2-user/influxdb-backup.sh" >> cron; \
+	crontab cron; \
+	rm cron;'
+
+amazon-linux-extras install docker -y 
+service docker start
+
+sleep 30
+
+docker run --rm --name influxdb -v /data:/data -v /wal:/wal -d -p 8086:8086 influxdb
