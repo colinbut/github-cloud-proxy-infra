@@ -1,5 +1,9 @@
 ## GitHub Cloud Proxy Infra
 
+This repository contains terraform infrastructure as code for building the infrastructure components (AWS resources) for the GitHub Cloud Proxy application.
+
+![GitHub Cloud Proxy AWS Diagram](docs/GitHubCloudProxyAWSDiagramExport.png)
+
 ## Prerequisites
 Make sure all following prerequisites are followed
 
