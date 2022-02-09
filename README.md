@@ -49,3 +49,7 @@ The terraform code does the following...
 7. Creating SNS Topic for notifications
 8. Creating Cloudwatch Metric Alarms for Monitoring
 9. Create Lamdba function to reboot the ec2 instances
+
+## Authors
+
+Colin But
